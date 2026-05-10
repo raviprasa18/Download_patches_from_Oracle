@@ -2,13 +2,18 @@
 This script helps you to download patches from Oracle site https://support.oracle.com/
 
 Sample output 
-
 Enter Patch Number , for example 38832610: 39091217
+
 Enter Email-ID (your-email@oracle.com): your-email-ID
+
 Enter password (your SSO Password):
+
 Patch Number : 39091217 and Email ID is : your-email-ID
+
 Downloading patch details for patch number 39091217...
+
 Select a Platform/Language:
+
 -------------------
 1) Linux ARM 64-bit
 2) Microsoft Windows x64 (64-bit)
@@ -23,15 +28,26 @@ Select a Platform/Language:
 Enter choice number: 8
 
 You selected:
+
 Text  : Oracle Solaris on x86-64 (64-bit)
+
 Value : 267P
+
 Retrieved ARU: 28655921
+
 Retrieved patch_num: 39091217
+
 Retrieved patch_num_id: 4745689
+
 Retrieved default_release: 600000000240751
+
 Retrieved default_plat_lang: 46P
+
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+  
                                  Dload  Upload   Total   Spent    Left  Speed
+                                 
   0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0
-  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0^C
+  
+  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0
 
