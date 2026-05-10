@@ -4,8 +4,9 @@ set -euo pipefail
 
 FILE="patch.html"
 
-export https_proxy=http://www-proxy.us.oracle.com:80
-export http_proxy=http://www-proxy.us.oracle.com:80
+# Uncomment these lines if you are behind a proxy server
+#export https_proxy=http://your-proxy-server:proxy-port
+#export http_proxy=http://your-proxy-server:proxy-port
 
 read -p "Enter Patch Number , for example 38832610: " PATCH_NUMBER
 read -p "Enter Email-ID (your-email@oracle.com): " EMAIL_ID
