@@ -42,33 +42,15 @@ get_hidden_value() {
         head -n 1
 }
 
-echo "Downloading patch details for patch number $PATCH_NUMBER..."
-curl -s -o "$FILE" -u "$EMAIL_ID:$PASSWORD" "https://updates.oracle.com/ARULink/PatchDetails/process_form?patch_num=$PATCH_NUMBER"
+has_select() {
+    local select_name="$1"
 
-if grep -q "401 Authorization Required" "$FILE"; then
-    echo "Error: 401 Authorization Required , user authentication failed. Please check your email ID and password."
-    exit 1
-fi
+    grep -q "<select[[:space:]]\+name=${select_name}" "$FILE"
+}
 
-select_name=""
-if grep -q '<select[[:space:]]\+name=release' "$FILE"; then
-    select_name="release"
-elif grep -q '<select[[:space:]]\+name=plat_lang' "$FILE"; then
-    select_name="plat_lang"
-else
-    echo "No release or platform/language options found. Downloading the default patch."
-    download_patch_file
-    exit 0
-fi
+get_select_options() {
+    local select_name="$1"
 
-if [ "$select_name" = "release" ]; then
-    echo "Select a Release:"
-else
-    echo "Select a Platform/Language:"
-fi
-echo "-------------------"
-
-mapfile -t options < <(
     awk -v select_name="$select_name" '
         $0 ~ "<select[[:space:]]+name=" select_name { in_block=1; next }
         /<\/select>/ { in_block=0 }
@@ -81,39 +63,73 @@ mapfile -t options < <(
         $2 ~ /^[[:space:]-]+$/ { next }
         { print }
     '
-)
+}
 
-if [ ${#options[@]} -eq 0 ]; then
-    echo "No selectable options found. Downloading the default patch."
-    download_patch_file
-    exit 0
-fi
+select_option() {
+    local select_name="$1"
+    local prompt="$2"
+    local choice
+    local index
+    local -a options
 
-for i in "${!options[@]}"; do
-    text="${options[$i]##*|}"
-    printf "%d) %s\n" $((i+1)) "$text"
-done
+    mapfile -t options < <(get_select_options "$select_name")
 
-echo
-read -p "Enter choice number: " choice
+    if [ ${#options[@]} -eq 0 ]; then
+        echo "No selectable $prompt options found."
+        return 1
+    fi
 
-if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#options[@]}" ]; then
-    echo "Invalid selection"
-    exit 1
-fi
+    echo "$prompt"
+    echo "-------------------"
 
-index=$((choice-1))
-value="${options[$index]%%|*}"
-text="${options[$index]##*|}"
+    for i in "${!options[@]}"; do
+        SELECTED_TEXT="${options[$i]##*|}"
+        printf "%d) %s\n" $((i+1)) "$SELECTED_TEXT"
+    done
 
-echo
-echo "You selected:"
-echo "Text  : $text"
-echo "Value : $value"
+    echo
+    read -p "Enter choice number: " choice
 
-if [ "$select_name" = "release" ]; then
-    change_url="https://updates.oracle.com/Orion/PatchDetails/handle_rel_change?release=$value&patch_num=$PATCH_NUMBER"
-else
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#options[@]}" ]; then
+        echo "Invalid selection"
+        exit 1
+    fi
+
+    index=$((choice-1))
+    SELECTED_VALUE="${options[$index]%%|*}"
+    SELECTED_TEXT="${options[$index]##*|}"
+
+    echo
+    echo "You selected:"
+    echo "Text  : $SELECTED_TEXT"
+    echo "Value : $SELECTED_VALUE"
+
+    return 0
+}
+
+handle_release_change() {
+    local change_url
+
+    select_option "release" "Select a Release:" || return 1
+
+    change_url="https://updates.oracle.com/Orion/PatchDetails/handle_rel_change?release=$SELECTED_VALUE&patch_num=$PATCH_NUMBER"
+
+    echo "URL for selected release: $change_url"
+    curl -s -L -u "$EMAIL_ID:$PASSWORD" -o "$FILE" "$change_url"
+
+    return 0
+}
+
+handle_plat_lang_change() {
+    local aru
+    local patch_num
+    local patch_num_id
+    local default_release
+    local default_plat_lang
+    local change_url
+
+    select_option "plat_lang" "Select a Platform/Language:" || return 1
+
     aru=$(get_hidden_value "aru")
     patch_num=$(get_hidden_value "patch_num")
     patch_num_id=$(get_hidden_value "patch_num_id")
@@ -126,10 +142,35 @@ else
     echo "Retrieved default_release: $default_release"
     echo "Retrieved default_plat_lang: $default_plat_lang"
 
-    change_url="https://updates.oracle.com/Orion/PatchDetails/handle_plat_lang_change?plat_lang=$default_plat_lang&aru=$aru&patch_num=$patch_num&patch_num_id=$patch_num_id&default_release=$default_release&default_plat_lang=$value"
+    change_url="https://updates.oracle.com/Orion/PatchDetails/handle_plat_lang_change?plat_lang=$default_plat_lang&aru=$aru&patch_num=$patch_num&patch_num_id=$patch_num_id&default_release=$default_release&default_plat_lang=$SELECTED_VALUE"
+
+    echo "URL for selected platform/language: $change_url"
+    curl -s -L -u "$EMAIL_ID:$PASSWORD" -o "$FILE" "$change_url"
+
+    return 0
+}
+
+echo "Downloading patch details for patch number $PATCH_NUMBER..."
+curl -s -o "$FILE" -u "$EMAIL_ID:$PASSWORD" "https://updates.oracle.com/ARULink/PatchDetails/process_form?patch_num=$PATCH_NUMBER"
+
+if grep -q "401 Authorization Required" "$FILE"; then
+    echo "Error: 401 Authorization Required , user authentication failed. Please check your email ID and password."
+    exit 1
 fi
 
-echo "URL for selected option: $change_url"
-curl -s -L -u "$EMAIL_ID:$PASSWORD" -o "$FILE" "$change_url"
+handled_selection="false"
+
+if has_select "release"; then
+    handle_release_change && handled_selection="true"
+fi
+
+if has_select "plat_lang"; then
+    handle_plat_lang_change && handled_selection="true"
+fi
+
+if [ "$handled_selection" = "false" ]; then
+    echo "No release or platform/language options found. Downloading the default patch."
+fi
 
 download_patch_file
+
